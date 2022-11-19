@@ -1,71 +1,101 @@
 import threading
 import socket
 
-from capchat_constants import PORT_NUMBER, BUFFER_SIZE, MESSAGE_HISTORY
-
+from capchat_constants import PORT_NUMBER, BUFFER_SIZE, MESSAGE_HISTORY, ERROR_CODES
 
 class MessageBoard:
   def __init__(self):
     self.messages = [None for i in range(MESSAGE_HISTORY)]
+    self.messagesSender = [None for i in range(MESSAGE_HISTORY)]
     self.latestMessageIndex = MESSAGE_HISTORY
-    self.activeUsernames = [] # TODO: don't allow multiple users with same name
+  
+activeUsernames = []
 
-
-def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:threading.Semaphore):
-  print("send thread created")
-
-  # Update the client on the latest 50 messages received by the message board
-  semaphore.acquire() # Synchronize shared access to MessageBoard object
-
-  # Find the oldest message
-  latestSentMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
-
-  numIterations = 0
-  while messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] == None:
-    numIterations += 1
-    latestSentMessageIndex = (latestSentMessageIndex + 1) % MESSAGE_HISTORY
-
-    if numIterations == MESSAGE_HISTORY:
-      latestSentMessageIndex = messageBoard.latestMessageIndex
-      break
-
-  print(latestSentMessageIndex)
-
-  # Send all messages from the oldest to the newest to the client
-
-  while not latestSentMessageIndex == messageBoard.latestMessageIndex:
-    # Send the next mesage that the thread needs
-    socket.send(messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY].encode())
-    latestSentMessageIndex = (latestSentMessageIndex + 1) % MESSAGE_HISTORY
-
-  semaphore.release()
-
-  print("caught up")
-
-  while True:
+def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:threading.Semaphore, clientUsername):
+  try:
+    # Update the client on the latest 50 messages received by the message board
     semaphore.acquire() # Synchronize shared access to MessageBoard object
 
-    if not latestSentMessageIndex == messageBoard.latestMessageIndex:
-      while not latestSentMessageIndex == messageBoard.latestMessageIndex:
-        # Send the next mesage that the thread needs
-        socket.send(messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY].encode())
-        latestSentMessageIndex = (latestSentMessageIndex + 1) % MESSAGE_HISTORY
+    # Find the oldest message
+    latestSentMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
 
-    semaphore.release() # Give other threads chance to update MessageBoard
+    numIterations = 0
+    while messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] == None:
+      numIterations += 1
+      latestSentMessageIndex = (latestSentMessageIndex + 1) % MESSAGE_HISTORY
 
+      if numIterations == MESSAGE_HISTORY:
+        latestSentMessageIndex = messageBoard.latestMessageIndex
+        break
 
-def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:threading.Semaphore):
-  print("receive thread created")
+    # Send all messages from the oldest to the newest to the client
 
-  while True:
-    #Receive message
-    message = socket.recv(BUFFER_SIZE).decode()
-    print(message)
-    semaphore.acquire()
-    messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
-    messageBoard.messages[messageBoard.latestMessageIndex] = message
+    while not latestSentMessageIndex == messageBoard.latestMessageIndex:
+      # Send the next mesage that the thread needs
+      message = "BROADCAST " + messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + " " + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY]
+      socket.send(message.encode())
+      latestSentMessageIndex = (latestSentMessageIndex + 1) % MESSAGE_HISTORY
+
     semaphore.release()
 
+    while True:
+      semaphore.acquire() # Synchronize shared access to MessageBoard object
+
+      if not latestSentMessageIndex == messageBoard.latestMessageIndex:
+        while not latestSentMessageIndex == messageBoard.latestMessageIndex:
+          # Send the next mesage that the thread needs
+          message = "BROADCAST " + messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + " " + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY]
+          socket.send(message.encode())
+          latestSentMessageIndex = (latestSentMessageIndex + 1) % MESSAGE_HISTORY
+
+      semaphore.release() # Give other threads chance to update MessageBoard
+  except Exception as e:
+    import ipdb
+    ipdb.set_trace()
+    print(e)
+    if clientUsername in activeUsernames:
+      activeUsernames.remove(clientUsername)
+    try:
+      socket.close()
+    except Exception as e:
+      pass
+
+    return
+
+def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:threading.Semaphore, clientUsername):
+  try:
+    while True:
+      #Receive message
+      message = socket.recv(BUFFER_SIZE).decode()
+      command = message.split()[0]
+      if command == "POST":
+        username = message.split()[1]
+        payload = " ".join(message.split()[2:])
+        print(payload)
+        semaphore.acquire()
+        messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
+        messageBoard.messagesSender[messageBoard.latestMessageIndex] = username 
+        messageBoard.messages[messageBoard.latestMessageIndex] = payload
+        semaphore.release()
+      elif command == "LEAVE":
+        username = message.split()[1]
+        print(f"recvd leave from {username}")
+        activeUsernames.remove(username)
+        socket.close()
+        return
+
+  except Exception as e:
+    import ipdb
+    ipdb.set_trace()
+    print(e)
+    if clientUsername in activeUsernames:
+      activeUsernames.remove(clientUsername)
+    try:
+      socket.close()
+    except Exception as e:
+      pass
+
+    return
 
 if __name__ =="__main__":
   sendThreads = []
@@ -89,16 +119,29 @@ if __name__ =="__main__":
     # Accept connection
     connectionSocket, addr = serverSocket.accept()
 
-    print("Connection received")
+    # Check username
+    message = connectionSocket.recv(BUFFER_SIZE).decode()
+    clientUsername = message.split()[1]
+    if clientUsername in activeUsernames:
+      print("Connection refused: username conflict")
 
-    sendThread = threading.Thread(target=serverSendThread, args=(connectionSocket,messageBoard,semaphore,))
-    receiveThread = threading.Thread(target=serverReceiveThread, args=(connectionSocket,messageBoard,semaphore,))
+      connectionSocket.send("ERROR 0".encode())
+      connectionSocket.close()
+    else:
+      print("Connection received")
+      connectionSocket.send("ACCEPT".encode())
 
-    sendThread.start()
-    receiveThread.start()
+      activeUsernames.append(clientUsername)
+      print(f"Active usernames: {activeUsernames}")
 
-    sendThreads.append(sendThread)
-    receiveThreads.append(receiveThread)
+      sendThread = threading.Thread(target=serverSendThread, args=(connectionSocket,messageBoard,semaphore,clientUsername,))
+      receiveThread = threading.Thread(target=serverReceiveThread, args=(connectionSocket,messageBoard,semaphore,clientUsername,))
+
+      sendThread.start()
+      receiveThread.start()
+
+      sendThreads.append(sendThread)
+      receiveThreads.append(receiveThread)
 
   for thread in sendThreads:
     thread.join()
