@@ -62,12 +62,24 @@ def sendMessage():
 def clientReceiveThread(clientSocket:socket.socket, username):
   try:
     while True:
-      buffer = clientSocket.recv(BUFFER_SIZE).decode()
-      messages = buffer.split(END_SEQUENCE)
+      buffer = clientSocket.recv(BUFFER_SIZE)
+      
+      # catch socket close after /leave
+      if (not buffer):
+        exit()
 
+      string = buffer.decode()
+
+      messages = string.split(END_SEQUENCE)
       for message in messages:
+        if (not message):
+          continue
+
         command = message.split()[0]
         if command == "BROADCAST":
+          if (len(message.split()) < 2):
+            print("bad BROADCAST received: " + message)
+            continue
           username = message.split()[1]
           payload = " ".join(message.split()[2:])
           message = username + senderSeparator + payload + "\n"

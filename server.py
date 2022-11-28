@@ -1,7 +1,7 @@
 import threading
 import socket
 
-from capchat_constants import PORT_NUMBER, BUFFER_SIZE, MESSAGE_HISTORY, ERROR_CODES
+from capchat_constants import *
 
 class MessageBoard:
   def __init__(self):
@@ -28,35 +28,53 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
         latestSentMessageIndex = messageBoard.latestMessageIndex
         break
 
+    # Add message indicating user join
+    messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
+    messageBoard.messagesSender[messageBoard.latestMessageIndex] = "SERVER" 
+    messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " joined"
+
     # Send all messages from the oldest to the newest to the client
 
     while not latestSentMessageIndex == messageBoard.latestMessageIndex:
       # Send the next mesage that the thread needs
-      message = "BROADCAST " + messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + " " + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY]
+      message = "BROADCAST " + messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + " " + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + END_SEQUENCE
       socket.send(message.encode())
       latestSentMessageIndex = (latestSentMessageIndex + 1) % MESSAGE_HISTORY
 
     semaphore.release()
 
     while True:
+      if clientUsername not in activeUsernames:
+        exit()
+
       semaphore.acquire() # Synchronize shared access to MessageBoard object
 
       if not latestSentMessageIndex == messageBoard.latestMessageIndex:
         while not latestSentMessageIndex == messageBoard.latestMessageIndex:
           # Send the next mesage that the thread needs
-          message = "BROADCAST " + messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + " " + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY]
+          message = "BROADCAST " + messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + " " + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + END_SEQUENCE
           socket.send(message.encode())
           latestSentMessageIndex = (latestSentMessageIndex + 1) % MESSAGE_HISTORY
 
       semaphore.release() # Give other threads chance to update MessageBoard
   except Exception as e:
-    import ipdb
-    ipdb.set_trace()
+    print("send exception")
+    # import ipdb
+    # ipdb.set_trace()
     print(e)
-    if clientUsername in activeUsernames:
-      activeUsernames.remove(clientUsername)
+
     try:
-      socket.close()
+      if clientUsername in activeUsernames:
+        activeUsernames.remove(clientUsername)
+
+        socket.close()
+        
+        # Add message indicating user leave
+        semaphore.acquire()
+        messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
+        messageBoard.messagesSender[messageBoard.latestMessageIndex] = "SERVER"
+        messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " left"
+        semaphore.release()
     except Exception as e:
       pass
 
@@ -66,32 +84,63 @@ def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semapho
   try:
     while True:
       #Receive message
-      message = socket.recv(BUFFER_SIZE).decode()
-      command = message.split()[0]
-      if command == "POST":
-        username = message.split()[1]
-        payload = " ".join(message.split()[2:])
-        print(payload)
-        semaphore.acquire()
-        messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
-        messageBoard.messagesSender[messageBoard.latestMessageIndex] = username 
-        messageBoard.messages[messageBoard.latestMessageIndex] = payload
-        semaphore.release()
-      elif command == "LEAVE":
-        username = message.split()[1]
-        print(f"recvd leave from {username}")
-        activeUsernames.remove(username)
-        socket.close()
-        return
+      buffer = socket.recv(BUFFER_SIZE)
+      string = buffer.decode()
+
+      messages = string.split(END_SEQUENCE)
+      for message in messages:
+        if (not message):
+          continue
+
+        command = message.split()[0]
+        if command == "POST":
+          if (len(message.split()) < 2):
+            print("bad POST received: " + message)
+            continue
+          username = message.split()[1]
+          payload = " ".join(message.split()[2:])
+          print(payload)
+          semaphore.acquire()
+          messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
+          messageBoard.messagesSender[messageBoard.latestMessageIndex] = username 
+          messageBoard.messages[messageBoard.latestMessageIndex] = payload
+          semaphore.release()
+        elif command == "LEAVE":
+          if (len(message.split()) < 1):
+            print("bad LEAVE received: " + message)
+            continue
+          username = message.split()[1]
+          print(f"recvd leave from {username}")
+          activeUsernames.remove(username)
+          socket.close()
+
+          # Add message indicating user leave
+          semaphore.acquire()
+          messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
+          messageBoard.messagesSender[messageBoard.latestMessageIndex] = "SERVER" 
+          messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " left"
+          semaphore.release()
+
+          return
 
   except Exception as e:
-    import ipdb
-    ipdb.set_trace()
+    # import ipdb
+    # ipdb.set_trace()
+    print("receive exception")
     print(e)
-    if clientUsername in activeUsernames:
-      activeUsernames.remove(clientUsername)
+
     try:
-      socket.close()
+      if clientUsername in activeUsernames:
+        activeUsernames.remove(clientUsername)
+
+        socket.close()
+        
+        # Add message indicating user leave
+        semaphore.acquire()
+        messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
+        messageBoard.messagesSender[messageBoard.latestMessageIndex] = "SERVER" 
+        messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " left"
+        semaphore.release()
     except Exception as e:
       pass
 
