@@ -1,11 +1,24 @@
 import sys
 import threading
 import socket
+import tkinter as tk
 
 from capchat_constants import PORT_NUMBER, BUFFER_SIZE, MAX_MESSAGE_LENGTH, ERROR_CODES, END_SEQUENCE
 
 inputPrompt = "> "
 senderSeparator = ": "
+
+# Initialize GUI
+# root is the main GUI window object
+root = tk.Tk()
+# Set the title
+root.title("CapChat")
+# Create the chat box
+chat = tk.Text(root, height=30, width=40)
+# Add the chat to the window
+chat.pack()
+
+#TODO Add input box so the user can send and receive messages all in the GUI
 
 def clientSendThread(clientSocket:socket.socket, username):
   leave = False
@@ -46,13 +59,12 @@ def clientReceiveThread(clientSocket:socket.socket, username):
         if command == "BROADCAST":
           username = message.split()[1]
           payload = " ".join(message.split()[2:])
-          message = username + senderSeparator + payload
-          # print("\033[J\033[A")
-          print("\033[1i]")
-          # print("\033[A\033[999C\n", end="")
-          print(message)
-          print(inputPrompt, end="")
-          sys.stdout.flush()
+          message = username + senderSeparator + payload + "\n"
+          # Update Chat box to show new message
+          chat.insert(tk.END, message)
+          # Auto scroll to the bottom of the chat to show the most recent
+          # message
+          chat.see(tk.END)
   except Exception as e:
     print(e)
     try:
@@ -90,6 +102,11 @@ if __name__ =="__main__":
 
       sendThread.start()
       receiveThread.start()
+
+      # Start up the GUI
+      # TODO Figure out how to make the GUI send a /leave command when the user
+      # hits the X button to quit the GUI window
+      root.mainloop()
 
       sendThread.join()
       receiveThread.join()
