@@ -10,3 +10,4 @@ ERROR_CODES = {
 END_SEQUENCE = "\n\n"
 
 ICON_FILE = "./images/capybara.png"
+SEND_ICON_FILE = "./images/send_icon.png"
