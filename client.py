@@ -3,7 +3,7 @@ import threading
 import socket
 import tkinter as tk
 
-from capchat_constants import PORT_NUMBER, BUFFER_SIZE, MAX_MESSAGE_LENGTH, ERROR_CODES, END_SEQUENCE
+from capchat_constants import PORT_NUMBER, BUFFER_SIZE, MAX_MESSAGE_LENGTH, ERROR_CODES, END_SEQUENCE, ICON_FILE
 
 inputPrompt = "> "
 senderSeparator = ": "
@@ -13,6 +13,10 @@ senderSeparator = ": "
 root = tk.Tk()
 # Set the title
 root.title("CapChat")
+# Load in capybara photo
+icon = tk.PhotoImage(file=ICON_FILE)
+# Add capybara photo as icon
+root.wm_iconphoto(True, icon)
 # Create the chat box
 chat = tk.Text(root, height=30, width=40)
 # Add the chat to the window

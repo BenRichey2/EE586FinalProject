@@ -8,3 +8,5 @@ ERROR_CODES = {
 }
 
 END_SEQUENCE = "\n\n"
+
+ICON_FILE = "./images/capybara.png"
