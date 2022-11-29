@@ -21,7 +21,6 @@ icon = tk.PhotoImage(file=ICON_FILE)
 root.wm_iconphoto(True, icon)
 # Configure window to send leave message to server when the user hits X
 def leave():
-  EXIT = True
   try:
     message = LEAVE_CODE + PROTOCOL_SEPARATOR + username + END_SEQUENCE
     clientSocket.send(message.encode())
@@ -53,6 +52,7 @@ def sendMessage():
     message = POST_CODE + PROTOCOL_SEPARATOR + username + PROTOCOL_SEPARATOR + message + END_SEQUENCE
     clientSocket.send(message.encode())
   except Exception as e:
+    print("send exception")
     print(e)
     EXIT = True
     try:
@@ -120,6 +120,7 @@ def clientReceiveThread(clientSocket:socket.socket, username):
           # Finally, disable box from editing
           chat.configure(state="disabled")
   except Exception as e:
+    print("receive exception")
     print(e)
     try:
       clientSocket.close()
