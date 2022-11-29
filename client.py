@@ -8,13 +8,19 @@ from capchat_constants import *
 
 EXIT = False
 
+WINDOW_WIDTH = 600
+WINDOW_HEIGHT = 520
+
+OUTPUT_WIDTH = 65
+OUTPUT_HEIGHT = 25
+
 # Initialize GUI
 # root is the main GUI window object
 root = tk.Tk()
 # Set the title
 root.title("CapChat")
 # Set window size
-root.geometry("600x520")
+root.geometry(str(WINDOW_WIDTH)+"x"+str(WINDOW_HEIGHT))
 # Load in capybara photo
 icon = tk.PhotoImage(file=ICON_FILE)
 # Add capybara photo as icon
@@ -33,7 +39,7 @@ root.protocol('WM_DELETE_WINDOW', leave)
 # Create the chat box
 chat_label = tk.Label(root, text="Chat")
 chat_label.pack(side=tk.TOP)
-chat = tk.Text(root, height=25, width=65, state="disabled")
+chat = tk.Text(root, height=OUTPUT_HEIGHT, width=OUTPUT_WIDTH, state="disabled")
 chat.pack()
 # Add input text box
 input_label = tk.Label(root, text="Enter Message Below")
@@ -45,6 +51,10 @@ def sendMessage():
   try:
     # Get message from input box
     message = input_box.get(1.0, "end-1c")
+
+    if not message:
+      return
+
     # Clear entry
     input_box.delete(1.0, tk.END)
     message = message.replace(END_SEQUENCE, "")
@@ -86,13 +96,28 @@ def clientReceiveThread(clientSocket:socket.socket, username):
           username = message.split(PROTOCOL_SEPARATOR)[1]
           payload = PROTOCOL_SEPARATOR.join(message.split(PROTOCOL_SEPARATOR)[2:])
 
+          # Create proper spacing for newlines and overflow lines
+
+          # Compute how much padding must be added and prepare the string with the padding
           newlineSpacing = len(username) + len(SENDER_SEPARATOR)
           newlineReplace = "\n"
           for i in range(0, newlineSpacing):
             newlineReplace += " "
-          payload = payload.replace("\n", newlineReplace)
+          
+          # Go through each line of the payload and add an artificial break if the line overflows
+          payloadLines = payload.split("\n")
+          payloadLinesNoOverflow = []
+          for line in payloadLines:
+            splitNumber = 0
+            while len(line[(OUTPUT_WIDTH - newlineSpacing) * splitNumber:]) > OUTPUT_WIDTH - newlineSpacing:
+              payloadLinesNoOverflow.append(line[(OUTPUT_WIDTH - newlineSpacing) * splitNumber:(OUTPUT_WIDTH - newlineSpacing) * (splitNumber + 1)])
+              splitNumber += 1
+            payloadLinesNoOverflow.append(line[(OUTPUT_WIDTH - newlineSpacing) * splitNumber:])
+          
+          # Rebuild the payload with the padding at the start of each line
+          reconstructedPayload = newlineReplace.join(payloadLinesNoOverflow[:])
 
-          output = username + SENDER_SEPARATOR + payload + "\n"
+          output = username + SENDER_SEPARATOR + reconstructedPayload + "\n"
           # Update Chat box to show new message
           # First enable box to be edited
           chat.configure(state="normal")
