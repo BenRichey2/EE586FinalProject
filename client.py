@@ -39,11 +39,11 @@ def sendMessage():
     # Clear entry
     input_box.delete(1.0, tk.END)
     message = message[0:MAX_MESSAGE_LENGTH]
-    if message == "/leave":
-      message = "LEAVE " + username + END_SEQUENCE
-      leave = True
-    else:
-      message = "POST " + username + " " + message + END_SEQUENCE
+    # gets rid of hte new line at the end of messages recursivly
+    message = rm_nl(message) 
+    message = rm_dnl(message) 
+    print(message)
+    message = "POST " + username + " " + message + END_SEQUENCE
     clientSocket.send(message.encode())
     if leave:
       exit()
@@ -80,6 +80,7 @@ def clientReceiveThread(clientSocket:socket.socket, username):
           if (len(message.split()) < 2):
             print("bad BROADCAST received: " + message)
             continue
+          print(message)
           username = message.split()[1]
           payload = " ".join(message.split()[2:])
           message = username + senderSeparator + payload + "\n"
@@ -102,6 +103,21 @@ def clientReceiveThread(clientSocket:socket.socket, username):
       return
 
     return
+
+def rm_nl(string):
+  if string.endswith("\n"):
+    string = string[0:-1]
+    string = rm_nl(string)
+  return string
+
+# make this prettier
+def rm_dnl(string):
+  string = string.split("\n\n")
+  final = ""
+  for sub in string:
+    if sub != "":
+      final = final + sub 
+  return string
 
 if __name__ =="__main__":
   if not len(sys.argv) == 3:

@@ -4,10 +4,17 @@ MESSAGE_HISTORY = 50
 MAX_MESSAGE_LENGTH = 1000
 
 ERROR_CODES = {
-  0, "Username already taken"
+  "0": "Username already taken"
 }
 
 END_SEQUENCE = "\n\n"
 
 ICON_FILE = "./images/capybara.png"
 SEND_ICON_FILE = "./images/send_icon.png"
+
+# for packet 
+COMMAND_LENGTH = 10
+UN_LENGTH = 20
+
+COMMAND_INDEX = [0:COMMAND_LENGTH]
+#UN_INDEX = [COMMAND_LENGTH:{COMMAND_LENGTH+UN_LENGTH}]

@@ -98,6 +98,7 @@ def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semapho
             print("bad POST received: " + message)
             continue
           username = message.split()[1]
+          print(message.split())
           payload = " ".join(message.split()[2:])
           print(payload)
           semaphore.acquire()
