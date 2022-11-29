@@ -6,8 +6,7 @@ from PIL import Image, ImageTk
 
 from capchat_constants import *
 
-
-senderSeparator = ": "
+EXIT = False
 
 # Initialize GUI
 # root is the main GUI window object
@@ -20,6 +19,15 @@ root.geometry("600x520")
 icon = tk.PhotoImage(file=ICON_FILE)
 # Add capybara photo as icon
 root.wm_iconphoto(True, icon)
+# Configure window to send leave message to server when the user hits X
+def leave():
+  message = LEAVE_CODE + PROTOCOL_SEPARATOR + username + END_SEQUENCE
+  clientSocket.send(message.encode())
+  EXIT = True
+  root.destroy()
+
+root.protocol('WM_DELETE_WINDOW', leave)
+
 # Create the chat box
 chat_label = tk.Label(root, text="Chat")
 chat_label.pack(side=tk.TOP)
@@ -32,21 +40,15 @@ input_box = tk.Text(root, height=3, width=60)
 input_box.pack(side=tk.LEFT, padx=(15,0))
 
 def sendMessage():
-  leave = False
   try:
     # Get message from input box
     message = input_box.get(1.0, "end-1c")
     # Clear entry
     input_box.delete(1.0, tk.END)
+    message = message.replace(END_SEQUENCE, "")
     message = message[0:MAX_MESSAGE_LENGTH]
-    # gets rid of hte new line at the end of messages recursivly
-    message = rm_nl(message) 
-    message = rm_dnl(message) 
-    print(message)
-    message = "POST " + username + " " + message + END_SEQUENCE
+    message = POST_CODE + PROTOCOL_SEPARATOR + username + PROTOCOL_SEPARATOR + message + END_SEQUENCE
     clientSocket.send(message.encode())
-    if leave:
-      exit()
   except Exception as e:
     print(e)
     try:
@@ -63,9 +65,9 @@ def clientReceiveThread(clientSocket:socket.socket, username):
   try:
     while True:
       buffer = clientSocket.recv(BUFFER_SIZE)
-      
+
       # catch socket close after /leave
-      if (not buffer):
+      if not buffer or EXIT:
         exit()
 
       string = buffer.decode()
@@ -75,20 +77,42 @@ def clientReceiveThread(clientSocket:socket.socket, username):
         if (not message):
           continue
 
-        command = message.split()[0]
-        if command == "BROADCAST":
-          if (len(message.split()) < 2):
+        command = message.split(PROTOCOL_SEPARATOR)[0]
+        if command == BROADCAST_CODE:
+          if (len(message.split(PROTOCOL_SEPARATOR)) < 3):
             print("bad BROADCAST received: " + message)
             continue
-          print(message)
-          username = message.split()[1]
-          payload = " ".join(message.split()[2:])
-          message = username + senderSeparator + payload + "\n"
+          username = message.split(PROTOCOL_SEPARATOR)[1]
+          payload = PROTOCOL_SEPARATOR.join(message.split(PROTOCOL_SEPARATOR)[2:])
+
+          newlineSpacing = len(username) + len(SENDER_SEPARATOR)
+          newlineReplace = "\n"
+          for i in range(0, newlineSpacing):
+            newlineReplace += " "
+          payload = payload.replace("\n", newlineReplace)
+
+          output = username + SENDER_SEPARATOR + payload + "\n"
           # Update Chat box to show new message
           # First enable box to be edited
           chat.configure(state="normal")
           # Then insert new message
-          chat.insert(tk.END, message)
+          chat.insert(tk.END, output)
+          # Auto scroll to the bottom of the chat to show the most recent
+          # message
+          chat.see(tk.END)
+          # Finally, disable box from editing
+          chat.configure(state="disabled")
+        elif command == SERVER_CODE:
+          if (len(message.split(PROTOCOL_SEPARATOR)) < 2):
+            print("bad SERVER received: " + message)
+            continue
+          payload = PROTOCOL_SEPARATOR.join(message.split(PROTOCOL_SEPARATOR)[1:])
+          output = payload + "\n"
+          # Update Chat box to show new message
+          # First enable box to be edited
+          chat.configure(state="normal")
+          # Then insert new message
+          chat.insert(tk.END, output)
           # Auto scroll to the bottom of the chat to show the most recent
           # message
           chat.see(tk.END)
@@ -104,28 +128,13 @@ def clientReceiveThread(clientSocket:socket.socket, username):
 
     return
 
-def rm_nl(string):
-  if string.endswith("\n"):
-    string = string[0:-1]
-    string = rm_nl(string)
-  return string
-
-# make this prettier
-def rm_dnl(string):
-  string = string.split("\n\n")
-  final = ""
-  for sub in string:
-    if sub != "":
-      final = final + sub 
-  return string
-
 if __name__ =="__main__":
-  if not len(sys.argv) == 3:
+  if len(sys.argv) < 3:
     print("Usage: python3 client.py <server ip address> <username>")
     exit(1)
 
   serverIP = sys.argv[1]
-  username = sys.argv[2]
+  username = " ".join(sys.argv[2:])
 
   try:
     # Open connection
@@ -133,14 +142,14 @@ if __name__ =="__main__":
 
     clientSocket.connect((serverIP, PORT_NUMBER))
 
-    message = "JOIN " + username + END_SEQUENCE
+    message = JOIN_CODE + PROTOCOL_SEPARATOR + username + END_SEQUENCE
     clientSocket.send(message.encode())
 
     message = clientSocket.recv(BUFFER_SIZE).decode()
-    if message.split()[0] == "ERROR":
-      print(ERROR_CODES[message.split()[1]])
+    if message.split(PROTOCOL_SEPARATOR)[0] == ERROR_CODE:
+      print(ERROR_CODES[message.split(PROTOCOL_SEPARATOR)[1]])
       exit(1)
-    elif message.split()[0] == "ACCEPT":
+    elif message.split(PROTOCOL_SEPARATOR)[0] == ACCEPT_CODE:
       # Load in send message icon
       send_img = Image.open(SEND_ICON_FILE)
       send_img = send_img.resize((30,30), Image.ANTIALIAS)
@@ -160,6 +169,11 @@ if __name__ =="__main__":
       receiveThread.join()
     else:
       print("Unknown response received from server. You may be susceptible to an attack.")
+
+  except KeyboardInterrupt as err:
+    print("Ctrl-c caught. Notifying threads to exit.")
+    EXIT = True
+    root.destroy()
 
   except Exception as e:
     print("An error occurred while connecting to the server")

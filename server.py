@@ -8,7 +8,9 @@ class MessageBoard:
     self.messages = [None for i in range(MESSAGE_HISTORY)]
     self.messagesSender = [None for i in range(MESSAGE_HISTORY)]
     self.latestMessageIndex = MESSAGE_HISTORY
-  
+
+EXIT = False
+
 activeUsernames = []
 
 def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:threading.Semaphore, clientUsername):
@@ -30,21 +32,25 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
 
     # Add message indicating user join
     messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
-    messageBoard.messagesSender[messageBoard.latestMessageIndex] = "SERVER" 
+    messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
     messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " joined"
 
     # Send all messages from the oldest to the newest to the client
 
     while not latestSentMessageIndex == messageBoard.latestMessageIndex:
       # Send the next mesage that the thread needs
-      message = "BROADCAST " + messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + " " + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + END_SEQUENCE
+      message = ""
+      if messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] == SERVER_CODE:
+        message = SERVER_CODE + PROTOCOL_SEPARATOR + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + END_SEQUENCE
+      else:
+        message = BROADCAST_CODE + PROTOCOL_SEPARATOR + messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + PROTOCOL_SEPARATOR + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + END_SEQUENCE
       socket.send(message.encode())
       latestSentMessageIndex = (latestSentMessageIndex + 1) % MESSAGE_HISTORY
 
     semaphore.release()
 
     while True:
-      if clientUsername not in activeUsernames:
+      if clientUsername not in activeUsernames or EXIT:
         exit()
 
       semaphore.acquire() # Synchronize shared access to MessageBoard object
@@ -52,11 +58,16 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
       if not latestSentMessageIndex == messageBoard.latestMessageIndex:
         while not latestSentMessageIndex == messageBoard.latestMessageIndex:
           # Send the next mesage that the thread needs
-          message = "BROADCAST " + messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + " " + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + END_SEQUENCE
+          message = ""
+          if messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] == SERVER_CODE:
+            message = SERVER_CODE + PROTOCOL_SEPARATOR + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + END_SEQUENCE
+          else:
+            message = BROADCAST_CODE + PROTOCOL_SEPARATOR + messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + PROTOCOL_SEPARATOR + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + END_SEQUENCE
           socket.send(message.encode())
           latestSentMessageIndex = (latestSentMessageIndex + 1) % MESSAGE_HISTORY
 
       semaphore.release() # Give other threads chance to update MessageBoard
+
   except Exception as e:
     print("send exception")
     # import ipdb
@@ -68,11 +79,11 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
         activeUsernames.remove(clientUsername)
 
         socket.close()
-        
+
         # Add message indicating user leave
         semaphore.acquire()
         messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
-        messageBoard.messagesSender[messageBoard.latestMessageIndex] = "SERVER"
+        messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
         messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " left"
         semaphore.release()
     except Exception as e:
@@ -83,6 +94,9 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
 def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:threading.Semaphore, clientUsername):
   try:
     while True:
+      if EXIT:
+        exit()
+
       #Receive message
       buffer = socket.recv(BUFFER_SIZE)
       string = buffer.decode()
@@ -92,25 +106,27 @@ def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semapho
         if (not message):
           continue
 
-        command = message.split()[0]
-        if command == "POST":
-          if (len(message.split()) < 2):
+        command = message.split(PROTOCOL_SEPARATOR)[0]
+        if command == POST_CODE:
+          if (len(message.split(PROTOCOL_SEPARATOR)) < 3):
             print("bad POST received: " + message)
             continue
-          username = message.split()[1]
-          print(message.split())
-          payload = " ".join(message.split()[2:])
-          print(payload)
+
+          username = message.split(PROTOCOL_SEPARATOR)[1]
+          payload = PROTOCOL_SEPARATOR.join(message.split(PROTOCOL_SEPARATOR)[2:])
+
           semaphore.acquire()
           messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
-          messageBoard.messagesSender[messageBoard.latestMessageIndex] = username 
+          messageBoard.messagesSender[messageBoard.latestMessageIndex] = username
           messageBoard.messages[messageBoard.latestMessageIndex] = payload
           semaphore.release()
-        elif command == "LEAVE":
-          if (len(message.split()) < 1):
+
+        elif command == LEAVE_CODE:
+          if (len(message.split(PROTOCOL_SEPARATOR)) < 2):
             print("bad LEAVE received: " + message)
             continue
-          username = message.split()[1]
+
+          username = message.split(PROTOCOL_SEPARATOR)[1]
           print(f"recvd leave from {username}")
           activeUsernames.remove(username)
           socket.close()
@@ -118,7 +134,7 @@ def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semapho
           # Add message indicating user leave
           semaphore.acquire()
           messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
-          messageBoard.messagesSender[messageBoard.latestMessageIndex] = "SERVER" 
+          messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
           messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " left"
           semaphore.release()
 
@@ -135,11 +151,11 @@ def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semapho
         activeUsernames.remove(clientUsername)
 
         socket.close()
-        
+
         # Add message indicating user leave
         semaphore.acquire()
         messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
-        messageBoard.messagesSender[messageBoard.latestMessageIndex] = "SERVER" 
+        messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
         messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " left"
         semaphore.release()
     except Exception as e:
@@ -158,45 +174,52 @@ if __name__ =="__main__":
   serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   serverSocket.bind(('',PORT_NUMBER))
 
-  while True:
+  try:
+    while True:
     # Try to prevent Python's weird tendency to update old values in a loop
-    sendThread = 0
-    receiveThread = 0
+      sendThread = 0
+      receiveThread = 0
 
-    # Wait for connection
-    serverSocket.listen(1)
+      # Wait for connection
+      serverSocket.listen(1)
 
-    # Accept connection
-    connectionSocket, addr = serverSocket.accept()
+      # Accept connection
+      connectionSocket, addr = serverSocket.accept()
 
-    # Check username
-    message = connectionSocket.recv(BUFFER_SIZE).decode()
-    clientUsername = message.split()[1]
-    if clientUsername in activeUsernames:
-      print("Connection refused: username conflict")
+      # Check username
+      message = connectionSocket.recv(BUFFER_SIZE).decode().split(END_SEQUENCE)[0]
+      clientUsername = message.split(PROTOCOL_SEPARATOR)[1]
+      if clientUsername in activeUsernames:
+        print("Connection refused: username conflict")
 
-      connectionSocket.send("ERROR 0".encode())
-      connectionSocket.close()
-    else:
-      print("Connection received")
-      connectionSocket.send("ACCEPT".encode())
+        response = ERROR_CODE + PROTOCOL_SEPARATOR + ERROR_USERNAME_CONFLICT
+        connectionSocket.send(response.encode())
+        connectionSocket.close()
+      else:
+        print("Connection received")
+        response = ACCEPT_CODE
+        connectionSocket.send(response.encode())
 
-      activeUsernames.append(clientUsername)
-      print(f"Active usernames: {activeUsernames}")
+        activeUsernames.append(clientUsername)
+        print(f"Active usernames: {activeUsernames}")
 
-      sendThread = threading.Thread(target=serverSendThread, args=(connectionSocket,messageBoard,semaphore,clientUsername,))
-      receiveThread = threading.Thread(target=serverReceiveThread, args=(connectionSocket,messageBoard,semaphore,clientUsername,))
+        sendThread = threading.Thread(target=serverSendThread, args=(connectionSocket,messageBoard,semaphore,clientUsername,))
+        receiveThread = threading.Thread(target=serverReceiveThread, args=(connectionSocket,messageBoard,semaphore,clientUsername,))
 
-      sendThread.start()
-      receiveThread.start()
+        sendThread.start()
+        receiveThread.start()
 
-      sendThreads.append(sendThread)
-      receiveThreads.append(receiveThread)
+        sendThreads.append(sendThread)
+        receiveThreads.append(receiveThread)
 
-  for thread in sendThreads:
-    thread.join()
+  except KeyboardInterrupt as err:
+    print("Ctrl-c caught. Notifying send/receive threads to quit.")
+    EXIT = True
 
-  for thread in receiveThreads:
-    thread.join()
+    for thread in sendThreads:
+      thread.join()
 
-  exit(0)
+    for thread in receiveThreads:
+      thread.join()
+
+    exit(0)
