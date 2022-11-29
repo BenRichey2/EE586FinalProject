@@ -188,29 +188,35 @@ if __name__ =="__main__":
 
       # Check username
       message = connectionSocket.recv(BUFFER_SIZE).decode().split(END_SEQUENCE)[0]
-      clientUsername = message.split(PROTOCOL_SEPARATOR)[1]
-      if clientUsername in activeUsernames:
-        print("Connection refused: username conflict")
+      command = message.split(PROTOCOL_SEPARATOR)[0]
+      if command == JOIN_CODE:
+        if (len(message.split(PROTOCOL_SEPARATOR)) < 2):
+          print("bad JOIN received: " + message)
+          continue
 
-        response = ERROR_CODE + PROTOCOL_SEPARATOR + ERROR_USERNAME_CONFLICT
-        connectionSocket.send(response.encode())
-        connectionSocket.close()
-      else:
-        print("Connection received")
-        response = ACCEPT_CODE
-        connectionSocket.send(response.encode())
+        clientUsername = message.split(PROTOCOL_SEPARATOR)[1]
+        if clientUsername in activeUsernames:
+          print("Connection refused: username conflict")
 
-        activeUsernames.append(clientUsername)
-        print(f"Active usernames: {activeUsernames}")
+          response = ERROR_CODE + PROTOCOL_SEPARATOR + ERROR_USERNAME_CONFLICT
+          connectionSocket.send(response.encode())
+          connectionSocket.close()
+        else:
+          print("Connection received")
+          response = ACCEPT_CODE
+          connectionSocket.send(response.encode())
 
-        sendThread = threading.Thread(target=serverSendThread, args=(connectionSocket,messageBoard,semaphore,clientUsername,))
-        receiveThread = threading.Thread(target=serverReceiveThread, args=(connectionSocket,messageBoard,semaphore,clientUsername,))
+          activeUsernames.append(clientUsername)
+          print(f"Active usernames: {activeUsernames}")
 
-        sendThread.start()
-        receiveThread.start()
+          sendThread = threading.Thread(target=serverSendThread, args=(connectionSocket,messageBoard,semaphore,clientUsername,))
+          receiveThread = threading.Thread(target=serverReceiveThread, args=(connectionSocket,messageBoard,semaphore,clientUsername,))
 
-        sendThreads.append(sendThread)
-        receiveThreads.append(receiveThread)
+          sendThread.start()
+          receiveThread.start()
+
+          sendThreads.append(sendThread)
+          receiveThreads.append(receiveThread)
 
   except KeyboardInterrupt as err:
     print("Ctrl-c caught. Notifying send/receive threads to quit.")

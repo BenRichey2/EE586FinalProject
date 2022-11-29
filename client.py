@@ -21,9 +21,12 @@ icon = tk.PhotoImage(file=ICON_FILE)
 root.wm_iconphoto(True, icon)
 # Configure window to send leave message to server when the user hits X
 def leave():
-  message = LEAVE_CODE + PROTOCOL_SEPARATOR + username + END_SEQUENCE
-  clientSocket.send(message.encode())
   EXIT = True
+  try:
+    message = LEAVE_CODE + PROTOCOL_SEPARATOR + username + END_SEQUENCE
+    clientSocket.send(message.encode())
+  except:
+    pass
   root.destroy()
 
 root.protocol('WM_DELETE_WINDOW', leave)
@@ -51,13 +54,11 @@ def sendMessage():
     clientSocket.send(message.encode())
   except Exception as e:
     print(e)
+    EXIT = True
     try:
       clientSocket.close()
     except Exception as e:
       print(e)
-      return
-
-    return
 
   return
 
@@ -124,7 +125,6 @@ def clientReceiveThread(clientSocket:socket.socket, username):
       clientSocket.close()
     except Exception as e:
       print(e)
-      return
 
     return
 
@@ -145,11 +145,19 @@ if __name__ =="__main__":
     message = JOIN_CODE + PROTOCOL_SEPARATOR + username + END_SEQUENCE
     clientSocket.send(message.encode())
 
-    message = clientSocket.recv(BUFFER_SIZE).decode()
-    if message.split(PROTOCOL_SEPARATOR)[0] == ERROR_CODE:
+    message = clientSocket.recv(BUFFER_SIZE).decode().split(END_SEQUENCE)[0]
+    command = message.split(PROTOCOL_SEPARATOR)[0]
+    if command == ERROR_CODE:
+      if (len(message.split(PROTOCOL_SEPARATOR)) < 2):
+        print("bad ERROR received: " + message)
+        exit(1)
       print(ERROR_CODES[message.split(PROTOCOL_SEPARATOR)[1]])
       exit(1)
-    elif message.split(PROTOCOL_SEPARATOR)[0] == ACCEPT_CODE:
+    elif command == ACCEPT_CODE:
+      if (len(message.split(PROTOCOL_SEPARATOR)) < 1):
+        print("bad ACCEPT received: " + message)
+        exit(1)
+
       # Load in send message icon
       send_img = Image.open(SEND_ICON_FILE)
       send_img = send_img.resize((30,30), Image.ANTIALIAS)
