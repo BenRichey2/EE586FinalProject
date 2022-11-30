@@ -1,5 +1,6 @@
 import threading
 import socket
+import time
 
 from capchat_constants import *
 
@@ -53,6 +54,8 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
       if clientUsername not in activeUsernames or EXIT:
         exit()
 
+      # Delay to reduce CPU consumption
+      time.sleep(DELAY)
       semaphore.acquire() # Synchronize shared access to MessageBoard object
 
       if not latestSentMessageIndex == messageBoard.latestMessageIndex:
@@ -70,8 +73,6 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
 
   except Exception as e:
     print("send exception")
-    # import ipdb
-    # ipdb.set_trace()
     print(e)
 
     try:
@@ -97,6 +98,8 @@ def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semapho
       if EXIT:
         exit()
 
+      # Delay to reduce CPU consumption
+      time.sleep(DELAY)
       #Receive message
       buffer = socket.recv(BUFFER_SIZE)
       string = buffer.decode()

@@ -23,3 +23,5 @@ END_SEQUENCE = "\0\0"
 
 ICON_FILE = "./images/capybara.png"
 SEND_ICON_FILE = "./images/send_icon.png"
+
+DELAY = 0.001 # Add 1ms delay to server send and recv threads
