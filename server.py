@@ -8,6 +8,7 @@ class MessageBoard:
   def __init__(self):
     self.messages = [None for i in range(MESSAGE_HISTORY)]
     self.messagesSender = [None for i in range(MESSAGE_HISTORY)]
+    self.messagesServer = [False for i in range(MESSAGE_HISTORY)]
     self.latestMessageIndex = MESSAGE_HISTORY
 
 activeUsernames = []
@@ -32,6 +33,7 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
     # Add message indicating user join
     messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
     messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
+    messageBoard.messagesServer[messageBoard.latestMessageIndex] = True
     messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " joined"
 
     # Send all messages from the oldest to the newest to the client
@@ -39,7 +41,7 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
     while not latestSentMessageIndex == messageBoard.latestMessageIndex:
       # Send the next mesage that the thread needs
       message = ""
-      if messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] == SERVER_CODE:
+      if messageBoard.messagesServer[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] == True:
         message = SERVER_CODE + PROTOCOL_SEPARATOR + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + END_SEQUENCE
       else:
         message = BROADCAST_CODE + PROTOCOL_SEPARATOR + messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + PROTOCOL_SEPARATOR + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + END_SEQUENCE
@@ -62,7 +64,7 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
         while not latestSentMessageIndex == messageBoard.latestMessageIndex:
           # Send the next mesage that the thread needs
           message = ""
-          if messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] == SERVER_CODE:
+          if messageBoard.messagesServer[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] == True:
             message = SERVER_CODE + PROTOCOL_SEPARATOR + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + END_SEQUENCE
           else:
             message = BROADCAST_CODE + PROTOCOL_SEPARATOR + messageBoard.messagesSender[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + PROTOCOL_SEPARATOR + messageBoard.messages[(latestSentMessageIndex + 1) % MESSAGE_HISTORY] + END_SEQUENCE
@@ -85,6 +87,7 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
         
         messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
         messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
+        messageBoard.messagesServer[messageBoard.latestMessageIndex] = True
         messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " left"
         
     except Exception as e:
@@ -130,6 +133,7 @@ def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semapho
           semaphore.acquire()
           messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
           messageBoard.messagesSender[messageBoard.latestMessageIndex] = username
+          messageBoard.messagesServer[messageBoard.latestMessageIndex] = False
           messageBoard.messages[messageBoard.latestMessageIndex] = payload
           semaphore.release()
 
@@ -148,6 +152,7 @@ def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semapho
           # Add message indicating user leave
           messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
           messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
+          messageBoard.messagesServer[messageBoard.latestMessageIndex] = True
           messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " left"
 
           semaphore.release()
@@ -168,6 +173,7 @@ def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semapho
         
         messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
         messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
+        messageBoard.messagesServer[messageBoard.latestMessageIndex] = True
         messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " left"
     except Exception as e:
       pass
