@@ -26,3 +26,11 @@ SEND_ICON_FILE = "./images/send_icon.png"
 
 DELAY = 0.001 # Add 1ms delay to server send and recv threads
 SOCK_TIMEOUT = 0.25 # Only let socket operations block for a quarter of a second
+
+WINDOW_BG_COLOR = "#002366"
+TEXT_COLOR = "#FAF8F6"
+TEXT_BOX_BG_COLOR = "#070606"
+SEND_BUTTON_COLOR  = "#36454F"
+LABEL_COLOR = "#7393B3"
+FONT = "Consolas 14 bold"
+INPUT_BOX_BG_COLOR = "#D3D3D3"

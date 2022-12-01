@@ -19,6 +19,7 @@ root = tk.Tk()
 root.title("CapChat")
 # Set window size
 root.geometry(str(WINDOW_WIDTH)+"x"+str(WINDOW_HEIGHT))
+root.configure(bg=WINDOW_BG_COLOR)
 # Load in capybara photo
 icon = tk.PhotoImage(file=ICON_FILE)
 # Add capybara photo as icon
@@ -36,14 +37,15 @@ def leave():
 root.protocol('WM_DELETE_WINDOW', leave)
 
 # Create the chat box
-chat_label = tk.Label(root, text="Chat")
+chat_label = tk.Label(root, text="Chat", bg=LABEL_COLOR, font=FONT)
 chat_label.pack(side=tk.TOP)
-chat = tk.Text(root, height=OUTPUT_HEIGHT, width=OUTPUT_WIDTH, state="disabled")
+chat = tk.Text(root, height=OUTPUT_HEIGHT, width=OUTPUT_WIDTH, state="disabled",
+                bg=TEXT_BOX_BG_COLOR, fg=TEXT_COLOR, bd=0)
 chat.pack()
 # Add input text box
-input_label = tk.Label(root, text="Enter Message Below")
+input_label = tk.Label(root, text="Enter Message Below", bg=LABEL_COLOR, font=FONT)
 input_label.pack(side=tk.TOP, pady=(5,0))
-input_box = tk.Text(root, height=3, width=60)
+input_box = tk.Text(root, height=3, width=60, bg=INPUT_BOX_BG_COLOR)
 input_box.pack(side=tk.LEFT, padx=(15,0))
 
 def sendMessage():
@@ -197,7 +199,7 @@ if __name__ =="__main__":
       send_img = send_img.resize((30,30), Image.Resampling.LANCZOS)
       send_icon = ImageTk.PhotoImage(send_img)
       # Create send message button
-      send_button = tk.Button(root, image=send_icon, command=sendMessage)
+      send_button = tk.Button(root, image=send_icon, command=sendMessage, bg=SEND_BUTTON_COLOR)
       send_button.pack(side=tk.RIGHT, padx=(0,25))
       # Set socket timeout so we don't block on recv
       clientSocket.settimeout(SOCK_TIMEOUT)
