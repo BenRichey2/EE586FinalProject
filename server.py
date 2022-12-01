@@ -49,12 +49,14 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
     semaphore.release()
 
     while True:
-      if clientUsername not in activeUsernames:
-        exit()
-
       # Delay to reduce CPU consumption
       time.sleep(DELAY)
+
       semaphore.acquire() # Synchronize shared access to MessageBoard object
+
+      if clientUsername not in activeUsernames:
+        semaphore.release()
+        exit()    
 
       if not latestSentMessageIndex == messageBoard.latestMessageIndex:
         while not latestSentMessageIndex == messageBoard.latestMessageIndex:
@@ -73,20 +75,22 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
     print("send exception")
     print(e)
 
+    semaphore.acquire()
+
     try:
       if clientUsername in activeUsernames:
         activeUsernames.remove(clientUsername)
 
         socket.close()
-
-        # Add message indicating user leave
-        semaphore.acquire()
+        
         messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
         messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
         messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " left"
-        semaphore.release()
+        
     except Exception as e:
       pass
+
+    semaphore.release()
 
     return
 
@@ -136,13 +140,16 @@ def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semapho
 
           username = message.split(PROTOCOL_SEPARATOR)[1]
           print(f"recvd leave from {username}")
+          
+          semaphore.acquire()
+
           activeUsernames.remove(username)
 
           # Add message indicating user leave
-          semaphore.acquire()
           messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
           messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
           messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " left"
+
           semaphore.release()
 
           return
@@ -151,20 +158,21 @@ def serverReceiveThread(socket:socket.socket, messageBoard:MessageBoard, semapho
     print("receive exception")
     print(e)
 
+    semaphore.acquire()
+
     try:
       if clientUsername in activeUsernames:
         activeUsernames.remove(clientUsername)
 
         socket.close()
-
-        # Add message indicating user leave
-        semaphore.acquire()
+        
         messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
         messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
         messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " left"
-        semaphore.release()
     except Exception as e:
       pass
+
+    semaphore.release()
 
     return
 
@@ -210,7 +218,9 @@ if __name__ =="__main__":
         response = ACCEPT_CODE
         connectionSocket.send(response.encode())
 
+        semaphore.acquire()
         activeUsernames.append(clientUsername)
+        semaphore.release()
         print(f"Active usernames: {activeUsernames}")
 
         # Set socket timeout
