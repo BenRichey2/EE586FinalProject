@@ -25,3 +25,4 @@ ICON_FILE = "./images/capybara.png"
 SEND_ICON_FILE = "./images/send_icon.png"
 
 DELAY = 0.001 # Add 1ms delay to server send and recv threads
+SOCK_TIMEOUT = 0.25 # Only let socket operations block for a quarter of a second

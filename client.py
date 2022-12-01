@@ -6,8 +6,6 @@ from PIL import Image, ImageTk
 
 from capchat_constants import *
 
-EXIT = False
-
 WINDOW_WIDTH = 600
 WINDOW_HEIGHT = 520
 
@@ -30,6 +28,7 @@ def leave():
   try:
     message = LEAVE_CODE + PROTOCOL_SEPARATOR + username + END_SEQUENCE
     clientSocket.send(message.encode())
+    clientSocket.close()
   except:
     pass
   root.destroy()
@@ -64,7 +63,6 @@ def sendMessage():
   except Exception as e:
     print("send exception")
     print(e)
-    EXIT = True
     try:
       clientSocket.close()
     except Exception as e:
@@ -75,11 +73,16 @@ def sendMessage():
 def clientReceiveThread(clientSocket:socket.socket, username):
   try:
     while True:
-      buffer = clientSocket.recv(BUFFER_SIZE)
+      try:
+        buffer = clientSocket.recv(BUFFER_SIZE)
 
-      # catch socket close after /leave
-      if not buffer or EXIT:
-        exit()
+      except TimeoutError as err:
+        buffer = None
+
+      # The client didn't recv anything within the timeout, but that doesn't
+      # necessarily mean they left
+      if buffer is None:
+        continue
 
       string = buffer.decode()
 
@@ -103,7 +106,7 @@ def clientReceiveThread(clientSocket:socket.socket, username):
           newlineReplace = "\n"
           for i in range(0, newlineSpacing):
             newlineReplace += " "
-          
+
           # Go through each line of the payload and add an artificial break if the line overflows
           payloadLines = payload.split("\n")
           payloadLinesNoOverflow = []
@@ -113,7 +116,7 @@ def clientReceiveThread(clientSocket:socket.socket, username):
               payloadLinesNoOverflow.append(line[(OUTPUT_WIDTH - newlineSpacing) * splitNumber:(OUTPUT_WIDTH - newlineSpacing) * (splitNumber + 1)])
               splitNumber += 1
             payloadLinesNoOverflow.append(line[(OUTPUT_WIDTH - newlineSpacing) * splitNumber:])
-          
+
           # Rebuild the payload with the padding at the start of each line
           reconstructedPayload = newlineReplace.join(payloadLinesNoOverflow[:])
 
@@ -144,6 +147,11 @@ def clientReceiveThread(clientSocket:socket.socket, username):
           chat.see(tk.END)
           # Finally, disable box from editing
           chat.configure(state="disabled")
+
+  except OSError:
+    # The socket was closed because the user quit the window
+    exit()
+
   except Exception as e:
     print("receive exception")
     print(e)
@@ -186,28 +194,21 @@ if __name__ =="__main__":
 
       # Load in send message icon
       send_img = Image.open(SEND_ICON_FILE)
-      send_img = send_img.resize((30,30), Image.ANTIALIAS)
+      send_img = send_img.resize((30,30), Image.Resampling.LANCZOS)
       send_icon = ImageTk.PhotoImage(send_img)
       # Create send message button
       send_button = tk.Button(root, image=send_icon, command=sendMessage)
       send_button.pack(side=tk.RIGHT, padx=(0,25))
+      # Set socket timeout so we don't block on recv
+      clientSocket.settimeout(SOCK_TIMEOUT)
       receiveThread = threading.Thread(target=clientReceiveThread, args=(clientSocket,username,))
 
       receiveThread.start()
 
       # Start up the GUI
-      # TODO Figure out how to make the GUI send a /leave command when the user
-      # hits the X button to quit the GUI window
       root.mainloop()
-
-      receiveThread.join()
     else:
       print("Unknown response received from server. You may be susceptible to an attack.")
-
-  except KeyboardInterrupt as err:
-    print("Ctrl-c caught. Notifying threads to exit.")
-    EXIT = True
-    root.destroy()
 
   except Exception as e:
     print("An error occurred while connecting to the server")
