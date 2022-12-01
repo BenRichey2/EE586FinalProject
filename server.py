@@ -18,7 +18,13 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
     # Update the client on the latest 50 messages received by the message board
     semaphore.acquire() # Synchronize shared access to MessageBoard object
 
-    # Find the oldest message
+    # Add message indicating user join
+    messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
+    messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
+    messageBoard.messagesServer[messageBoard.latestMessageIndex] = True
+    messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " joined"
+
+    # Find the oldest message in case the message history is not full yet
     latestSentMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
 
     numIterations = 0
@@ -30,14 +36,7 @@ def serverSendThread(socket:socket.socket, messageBoard:MessageBoard, semaphore:
         latestSentMessageIndex = messageBoard.latestMessageIndex
         break
 
-    # Add message indicating user join
-    messageBoard.latestMessageIndex = (messageBoard.latestMessageIndex + 1) % MESSAGE_HISTORY
-    messageBoard.messagesSender[messageBoard.latestMessageIndex] = SERVER_CODE
-    messageBoard.messagesServer[messageBoard.latestMessageIndex] = True
-    messageBoard.messages[messageBoard.latestMessageIndex] = clientUsername + " joined"
-
     # Send all messages from the oldest to the newest to the client
-
     while not latestSentMessageIndex == messageBoard.latestMessageIndex:
       # Send the next mesage that the thread needs
       message = ""
