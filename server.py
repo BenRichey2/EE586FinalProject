@@ -215,12 +215,12 @@ if __name__ =="__main__":
       if clientUsername in activeUsernames:
         print("Connection refused: username conflict")
 
-        response = ERROR_CODE + PROTOCOL_SEPARATOR + ERROR_USERNAME_CONFLICT
+        response = ERROR_CODE + PROTOCOL_SEPARATOR + ERROR_USERNAME_CONFLICT + END_SEQUENCE
         connectionSocket.send(response.encode())
         connectionSocket.close()
       else:
         print("Connection received")
-        response = ACCEPT_CODE
+        response = ACCEPT_CODE + END_SEQUENCE
         connectionSocket.send(response.encode())
 
         semaphore.acquire()
