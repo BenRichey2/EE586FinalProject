@@ -58,6 +58,7 @@ def sendMessage():
 
     # Clear entry
     input_box.delete(1.0, tk.END)
+    message = message.replace(PROTOCOL_SEPARATOR, "")
     message = message.replace(END_SEQUENCE, "")
     message = message[0:MAX_MESSAGE_LENGTH]
     message = POST_CODE + PROTOCOL_SEPARATOR + username + PROTOCOL_SEPARATOR + message + END_SEQUENCE
