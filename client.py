@@ -37,13 +37,13 @@ def leave():
 root.protocol('WM_DELETE_WINDOW', leave)
 
 # Create the chat box
-chat_label = tk.Label(root, text="Chat", bg=LABEL_COLOR, font=FONT)
+chat_label = tk.Label(root, text="Chat", bg=LABEL_COLOR, font=FONT, fg=TEXT_COLOR)
 chat_label.pack(side=tk.TOP)
 chat = tk.Text(root, height=OUTPUT_HEIGHT, width=OUTPUT_WIDTH, state="disabled",
                 bg=TEXT_BOX_BG_COLOR, fg=TEXT_COLOR, bd=0)
 chat.pack()
 # Add input text box
-input_label = tk.Label(root, text="Enter Message Below", bg=LABEL_COLOR, font=FONT)
+input_label = tk.Label(root, text="Enter Message Below", bg=LABEL_COLOR, font=FONT, fg=TEXT_COLOR)
 input_label.pack(side=tk.TOP, pady=(5,0))
 input_box = tk.Text(root, height=3, width=60, bg=INPUT_BOX_BG_COLOR)
 input_box.pack(side=tk.LEFT, padx=(15,0))
